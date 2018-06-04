@@ -8,5 +8,5 @@ gcc -o <prog_name> fdupchk.c
 
 # usage
 ```
-<prog_name> <directory> [-n] [-s] [-c] [--help]
+<prog_name> [--help] [-n] [-s] [-c] <directory>
 ```
