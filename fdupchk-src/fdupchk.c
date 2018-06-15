@@ -120,19 +120,18 @@ int find_duplicates(file_t **file_table, int table_size, int mode)
 			is_dup = -1;  //-1=not compared, 0=compared but different, 1=match
 
 			if (mode & FCMP_NAME){
-				file_get_info(file_table[j], file_table[j]->fpath, FCMP_NAME);
 				is_dup = fcmp(file_current, file_table[j], FCMP_NAME);
 			}
 			
 			if (mode & FCMP_SIZE) {
-				if (is_dup != 0) {  //if previous higher priority check exists and failed
+				if (is_dup != 0) {  //if items are not compared or previous checks are matches
 					file_get_info(file_table[j], file_table[j]->fpath, FCMP_SIZE);
 					is_dup = fcmp(file_current, file_table[j], FCMP_SIZE);
 				}
 			}
 			
 			if (mode & FCMP_CONTENT) {
-				if (is_dup != 0) {  //if previous higher priority check exists and failed
+				if (is_dup != 0) {  //if items are not compared or previous checks are matches
 					is_dup = fcmp(file_current, file_table[j], FCMP_CONTENT);
 				}
 			}
@@ -263,7 +262,7 @@ int main(int argc, char **argv)
 
 	file_t **file_table;
 	file_table = malloc(2000000 * sizeof(file_t*));  //2million file struct pointers ~16MB ram - fixed mem method
-	traverse_dir(file_table, search_dir, 0);  //only put file paths in file table
+	traverse_dir(file_table, search_dir, FCMP_NAME);  //only put file paths in file table
 
 	printf("found %d files in directory.\n", g_traverse_index);
 	find_duplicates(file_table, g_traverse_index, mode);
