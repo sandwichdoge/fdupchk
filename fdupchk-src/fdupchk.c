@@ -108,12 +108,12 @@ int find_duplicates(file_t **file_table, int table_size, int mode)
 	byte is_dup;  
 	byte is_firstdup = 1;  //for better formatting.
 	file_t *file_current;
-	for (int i = 0; i < table_size; ++i) {
+	for (int i = 0; i < table_size; i++) {
 		file_current = file_table[i];
 		if (file_current->fpath[0] == '\0') continue;
 		if (file_current->fsize == 0) file_current->fsize = file_get_size(file_current->fpath);
 		is_firstdup = 1;
-		for (int j = 0; j < table_size; ++j) {
+		for (int j = 0; j < table_size; j++) {
 			if (file_table[j]->fpath != NULL && file_table[j]->fpath[0] == '\0') continue;  //processed item
 			if (i == j) continue;  //do not compare with self.
 			
@@ -125,7 +125,7 @@ int find_duplicates(file_t **file_table, int table_size, int mode)
 			
 			if (mode & FCMP_SIZE) {
 				if (is_dup != 0) {  //if items are not compared or previous checks are matches
-					file_get_info(file_table[j], file_table[j]->fpath, FCMP_SIZE);
+					file_table[j]->fsize = file_get_size(file_table[j]->fpath);
 					is_dup = fcmp(file_current, file_table[j], FCMP_SIZE);
 				}
 			}
@@ -237,7 +237,7 @@ int main(int argc, char **argv)
 	int mode = 0;
 	char *search_dir;
 	
-	for (int i = 1; i < argc; ++i){  //load up params
+	for (int i = 1; i < argc; i++){  //load up params
 		if (strcmp(argv[i], "-n") == 0) mode |= FCMP_NAME;
 		else if (strcmp(argv[i], "-s") == 0) mode |= FCMP_SIZE;
 		else if (strcmp(argv[i], "-c") == 0) mode |= FCMP_CONTENT;
@@ -269,7 +269,7 @@ int main(int argc, char **argv)
 	//clean up
 	printf("all done, cleaning up..\n");
 	free(search_dir);
-	for (int i = g_traverse_index - 1; i; --i){
+	for (int i = g_traverse_index - 1; i; i--){
 		if (file_table[i] != NULL) free(file_table[i]);
 	}
 	free(file_table);
