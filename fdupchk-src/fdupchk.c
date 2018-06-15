@@ -35,7 +35,7 @@ int file_get_info(file_t *pfile_struct_buf, char *filepath, int mode)
 		char *tmp = extract_file_name(pfile_struct_buf->fpath);
 		strcpy(pfile_struct_buf->fname, tmp);
 	}
-	else memcpy(pfile_struct_buf->fname, '\0', 1);
+	else memset(pfile_struct_buf->fname, '\0', 1);
 
 	if (mode & FCMP_SIZE) {
 		pfile_struct_buf->fsize = file_get_size(pfile_struct_buf->fpath);
@@ -265,7 +265,7 @@ int main(int argc, char **argv)
 
 	file_t **file_table;
 	file_table = malloc(2000000 * sizeof(file_t*));  //2million file struct pointers ~16MB ram - fixed mem method
-	traverse_dir(file_table, search_dir, FCMP_NAME);  //TODO: only get filenames
+	traverse_dir(file_table, search_dir, FCMP_NAME);  //only put file paths in file table
 
 	printf("found %d files in directory.\n", g_traverse_index);
 	find_duplicates(file_table, g_traverse_index, mode);
