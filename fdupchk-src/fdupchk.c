@@ -27,50 +27,47 @@ typedef struct {
 int g_traverse_index;  //to index items in traverse_directory()
 
 //store info of a file [NAME+SIZE] to a buffer struct.
-file_t *file_get_info(char *filepath, int mode)
+int file_get_info(file_t *pfile_struct_buf, char *filepath, int mode)
 {
-	file_t *pfile_struct_buf = malloc(sizeof(file_t));
-	/*if (pfile_struct_buf == NULL){
-		puts("out of memory");
-		return NULL;
-	}*/
-
 	strcpy(pfile_struct_buf->fpath, filepath);
 
 	if (mode & FCMP_NAME){
 		char *tmp = extract_file_name(pfile_struct_buf->fpath);
 		strcpy(pfile_struct_buf->fname, tmp);
 	}
+	else memcpy(pfile_struct_buf->fname, '\0', 1);
+
 	if (mode & FCMP_SIZE) {
 		pfile_struct_buf->fsize = file_get_size(pfile_struct_buf->fpath);
 	}
+	else pfile_struct_buf->fsize = 0;
 	
 	//TODO: add HASH method here to compare file content?
-	return pfile_struct_buf;
+	return 0;
 }
 
 
 //compare 2 file info structs
-int fcmp(file_t *pfile1, file_t *pfile2, int mode)
+int fcmp(file_t *pfile1, file_t *pfile2, int mode)  //return 1 or 0 (true or false)
 {
 	byte ret = 0;
-	char buf1[1024];
-	char buf2[1024];
 	int bytes_read1, bytes_read2;
 	bytes_read1 = bytes_read2 = 1;
 
 	if (!(pfile1->fpath) || !(pfile2->fpath)) return 0;  //sanity check.
-	
+
 	if (mode & FCMP_NAME) {
 		if (strcmp(pfile1->fname, pfile2->fname) == 0) ret |= FCMP_NAME;
 	}
 	if (mode & FCMP_SIZE) {
-		if (!(ret & FCMP_NAME) && mode & FCMP_NAME) return 0;  //do not check size dif if namecheck fails.
+		//skip size check if both name and size are compared and namecheck failed.
 		if (pfile1->fsize == pfile2->fsize) ret |= FCMP_SIZE;
 		else return 0;  //different size -> obviously not a duplicate
 	}
 	
 	if (mode & FCMP_CONTENT) {  //TODO: replace this with hash method?
+		char buf1[1024];
+		char buf2[1024];
 		if (pfile1->fsize != pfile2->fsize) return 0;  //compare sizes again jic, return 0 if sizes differ.
 		FILE *fd1 = fopen(pfile1->fpath, "rb");
 		FILE *fd2 = fopen(pfile2->fpath, "rb");
@@ -105,7 +102,8 @@ int fcmp(file_t *pfile1, file_t *pfile2, int mode)
 }
 
 //recursively find duplicates of file in file table.
-int find_duplicates(file_t **file_table, int table_size, int mode)
+//priority: name -> size -> content, if higher priority fails -> will not check the rest
+int find_duplicates(file_t **file_table, int table_size, int mode)  
 {
 	byte is_dup = 0;
 	byte is_firstdup = 1;  //for better formatting.
@@ -113,11 +111,35 @@ int find_duplicates(file_t **file_table, int table_size, int mode)
 	for (int i = 0; i < table_size; ++i) {
 		file_current = file_table[i];
 		if (file_current->fpath[0] == '\0') continue;
+		if (file_current->fsize == 0) file_current->fsize = file_get_size(file_current->fpath);
 		is_firstdup = 1;
 		for (int j = 0; j < table_size; ++j) {
 			if (file_table[j]->fpath != NULL && file_table[j]->fpath[0] == '\0') continue;
 			if (i == j) continue;  //do not compare with self.
-			is_dup = fcmp(file_current, file_table[j], mode);
+
+
+			if (mode & FCMP_NAME){
+				is_dup = fcmp(file_current, file_table[j], FCMP_NAME);
+			}
+			
+			if (mode & FCMP_SIZE) {
+				if (mode != FCMP_SIZE && is_dup == 0) is_dup = 0;  //if previous higher priority check exists and failed
+				else {
+					file_table[j]->fsize = file_get_size(file_table[j]->fpath);
+					is_dup = fcmp(file_current, file_table[j], FCMP_SIZE);
+				}
+				
+			}
+
+			if (mode & FCMP_CONTENT) {
+				if (mode != FCMP_CONTENT && is_dup == 0) is_dup = 0;  //if previous higher priority check exists and failed
+				else {
+					file_table[j]->fsize = file_get_size(file_table[j]->fpath);
+					is_dup = fcmp(file_current, file_table[j], FCMP_CONTENT);
+				}
+			}
+
+
 			if (is_dup) {
 				if (is_firstdup) {
 					printf("\n%s\n", file_current->fpath);
@@ -131,6 +153,7 @@ int find_duplicates(file_t **file_table, int table_size, int mode)
 	return 0;
 }
 
+/*
 //count number of files in directory, recursive. for low memory (<20MB) method only
 unsigned int count_files_in_dir(char *dir)
 {
@@ -157,7 +180,7 @@ unsigned int count_files_in_dir(char *dir)
 	closedir(dir_stream);
 	return count;
 }
-
+*/
 
 //traverse dir and list all files in an array of pointers to structs.
 int traverse_dir(file_t **file_table, char *dir, int mode)
@@ -178,7 +201,12 @@ int traverse_dir(file_t **file_table, char *dir, int mode)
 			}
 		}
 		else if (entry->d_type == DT_REG) {  //if entry is a regular file -> index it to file table.
-			file_t *target_file = file_get_info(full_entry_path, mode);
+			file_t *target_file = malloc(sizeof(file_t));
+			/*if (target_file == NULL){
+			puts("out of memory");
+			return -1;
+			}*/
+			file_get_info(target_file, full_entry_path, mode);
 			file_table[g_traverse_index] = target_file;
 			g_traverse_index++;
 		}
@@ -237,12 +265,12 @@ int main(int argc, char **argv)
 
 	file_t **file_table;
 	file_table = malloc(2000000 * sizeof(file_t*));  //2million file struct pointers ~16MB ram - fixed mem method
-	traverse_dir(file_table, search_dir, mode);
+	traverse_dir(file_table, search_dir, FCMP_NAME);  //TODO: only get filenames
 
-	puts("finding duplicates..");
+	printf("found %d files in directory.\n", g_traverse_index);
 	find_duplicates(file_table, g_traverse_index, mode);
 	//clean up
-	puts("all done, cleaning up..");
+	printf("all done, cleaning up..\n");
 	free(search_dir);
 	for (int i = g_traverse_index - 1; i; --i){
 		if (file_table[i] != NULL) free(file_table[i]);
