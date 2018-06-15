@@ -1,6 +1,5 @@
 #ifndef _DIRNAV_H
 #define _DIRNAV_H
-#endif
 #include <sys/types.h>
 #include <stdio.h>
 #include <string.h>
@@ -9,11 +8,13 @@
 #ifdef _WIN32
 #include "dirent.h"
 #define DIR_SEPARATOR "\\"
+typedef unsigned long long uint_64b;
 #else
 #include <dirent.h>
 #define DIR_SEPARATOR "/"
+typedef unsigned long uint_64b;
 #endif
-
+#endif
 
 int is_directory(char* sPath)
 {
@@ -112,9 +113,9 @@ void list_dir(char* path)
 }
 
 
-size_t file_get_size(char* sTargetFile)
+uint_64b file_get_size(char* sTargetFile)
 {
-	size_t Sz;
+	uint_64b Sz;
 	FILE *_fp;
 	_fp = fopen(sTargetFile, "rb");
 	if (_fp == NULL)
