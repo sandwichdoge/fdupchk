@@ -84,6 +84,18 @@ str_t* list_insert(str_t *list, char *str, int pos)  //if pos is more than list 
 }
 
 
+void list_free(str_t *list)
+{
+	str_t *tmp;
+	while (list != NULL) {
+		tmp = list->next;
+		free(list);
+		list = tmp;
+	}
+
+	return;
+}
+
 //compare 2 file info structs
 //priority: name -> size -> content, if higher priority fails -> will not check the rest
 int fcmp(file_t *pfile1, file_t *pfile2, int mode)
@@ -139,7 +151,7 @@ int fcmp(file_t *pfile1, file_t *pfile2, int mode)
 }
 
 
-file_t* traverse_tree(file_t *parent, file_t *target, int mode)  //traverse tree and check for duplicates
+file_t* tree_traverse(file_t *parent, file_t *target, int mode)  //traverse tree and check for duplicates
 {
 	if (parent == NULL) {
 		parent = target;
@@ -163,22 +175,32 @@ file_t* traverse_tree(file_t *parent, file_t *target, int mode)  //traverse tree
 		//printf("%s\n", target->fpath);  //duplicate file's path
 	}
 	else if (fcmp(parent, target, mode) < 0) {
-		parent->left = traverse_tree(parent->left, target, mode);
+		parent->left = tree_traverse(parent->left, target, mode);
 	}
 	else if (fcmp(parent, target, mode) > 0) {
-		parent->right = traverse_tree(parent->right, target, mode);
+		parent->right = tree_traverse(parent->right, target, mode);
 	}
 	return parent;
 }
 
 
+void tree_free(file_t *parent)
+{
+	if (parent == NULL) return;
+	if (parent->left != NULL) tree_free(parent->left);
+	if (parent->right != NULL) tree_free(parent->right);
+	free(parent);
+	return;
+}
+
+
 //traverse dir and find all duplicate files within it
 //O(nlogn) time complexity using binary tree dir structure with n = number of files in root dir
-int traverse_dir(file_t *root, char *dir, int mode)
+file_t* find_duplicates(file_t *root, char *dir, int mode)
 {
 	char full_entry_path[1024];
 	DIR *dir_stream = opendir(dir);
-	if (dir_stream == NULL) return -1;
+	if (dir_stream == NULL) return NULL;
 	int is_disk = dir_is_disk(dir);
 
 	struct dirent *entry;
@@ -189,7 +211,7 @@ int traverse_dir(file_t *root, char *dir, int mode)
 		if (entry->d_type == DT_DIR) {  //entry is directory -> step inside it
 			if (strcmp(entry->d_name, "..") == 0 || strcmp(entry->d_name, ".") == 0) continue;  //ignore stepback & current dir
 			else {
-				traverse_dir(root, full_entry_path, mode);  //step inside
+				find_duplicates(root, full_entry_path, mode);  //step inside
 			}
 		}
 		else if (entry->d_type == DT_REG) {  //if entry is a regular file -> put it in file tree and perform comparison.
@@ -202,14 +224,14 @@ int traverse_dir(file_t *root, char *dir, int mode)
 			strcpy(target_file->fpath, full_entry_path);  //index fpath
 
 			//will only modify root if root is NULL
-			//in other words, traverse_tree() will only carry return ptr of node thru 1 recursion level
+			//in other words, tree_traverse() will only carry return ptr of node thru 1 recursion level
 			//otherwise it will return the same pointer to root
-			root = traverse_tree(root, target_file, mode);
+			root = tree_traverse(root, target_file, mode);
 			g_traverse_index++;
 		}
 	}
 	closedir(dir_stream);
-	return g_traverse_index;
+	return root;
 }
 
 
@@ -245,7 +267,7 @@ int main(int argc, char **argv)
 	}
 	
 	if (mode == 0) {
-		printf("please set at least 1 comparision parameter [-n][-s][-c].\n");
+		printf("please set at least 1 comparision parameter [-n][-s].\n");
 		return 0;
 	}
 	if (!is_directory(search_dir)) {
@@ -258,15 +280,15 @@ int main(int argc, char **argv)
 	g_duplicate_list = list_add(NULL, "");  //init duplicate list
 
 	file_t *root = NULL;
-	traverse_dir(root, search_dir, mode);
-
-	printf("found %d duplicate files from %d files in directory.\n", g_duplicate_count, g_traverse_index);
+	root = find_duplicates(root, search_dir, mode);
 	
 	while (g_duplicate_list != NULL) {
 		printf("%s\n", g_duplicate_list->str);
 		g_duplicate_list = g_duplicate_list->next;
 	}
 
-	if (root != NULL) free(root);
+	printf("found %d duplicate files from %d files in directory.\n", g_duplicate_count, g_traverse_index);
+	tree_free(root);
+	list_free(g_duplicate_list);
 	return 0;
 }
