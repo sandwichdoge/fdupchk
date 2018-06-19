@@ -3,6 +3,7 @@
 #include <string.h>
 #include "../lib/dirnav.h"
 
+#define F_ERROR -256
 #define FCMP_NAME 1
 #define FCMP_SIZE 2
 #define FCMP_CONTENT 4
@@ -17,72 +18,101 @@ typedef unsigned long uint_64b;
 
 typedef char byte;
 
-typedef struct file_t{
+typedef struct file_t {
 	char fpath[1024];
 	char fname[128];
 	uint_64b fsize;
 	struct file_t *left;
 	struct file_t *right;
-
 } file_t;
 
-typedef struct str_t{
-	char str[1024];
+typedef struct str_t {  //linked list of strings
+	char *str;  //this should point to file_node->fpath
 	struct str_t *next;
+} str_t;
+
+
+int g_traverse_index;  //total number of files in dir
+int g_duplicate_count;  //number of duplicate files
+str_t *g_duplicate_list;
+
+
+str_t* list_add(str_t *list, char *str)  //traverse till end of list and add new member, return ptr to it
+{
+	str_t *prev = NULL;
+	if (list != NULL) {
+		while (list != NULL) {
+			prev = list;
+			list = list->next;
+		}
+	}
+	list = malloc(sizeof(str_t));
+	list->str = str;
+	list->next = NULL;
+	if (prev != NULL) prev->next = list;
+	return list;
 }
 
-int g_traverse_index;  //to index items in traverse_directory()
 
-//store info of a file [NAME+SIZE] to a buffer struct.
-int file_get_info(file_t *pfile_struct_buf, char *filepath, int mode)
+int list_find(str_t *list, char *str)  //return index of str in list
 {
-	strcpy(pfile_struct_buf->fpath, filepath);
-
-	if (mode & FCMP_NAME){
-		char *tmp = extract_file_name(pfile_struct_buf->fpath);
-		strcpy(pfile_struct_buf->fname, tmp);
+	int index = 0;
+	while (list != NULL) {
+		if (strcmp(list->str, str) == 0) return index;
+		list = list->next;
+		index++;
 	}
-	else memset(pfile_struct_buf->fname, '\0', 1);
+	return -1;  //not found
+}
 
-	if (mode & FCMP_SIZE) {
-		pfile_struct_buf->fsize = file_get_size(pfile_struct_buf->fpath);
+
+str_t* list_insert(str_t *list, char *str, int pos)  //if pos is more than list bound, add new member to end of list
+{
+	str_t *prev;
+	while (pos-- >= 0) {
+		prev = list;
+		list = list->next;
+		if (list == NULL) break;
 	}
-	else pfile_struct_buf->fsize = 0;
+	str_t *new_node = malloc(sizeof(str_t));
+	new_node->str = str;
 	
-	pfile_struct_buf->left = NULL;
-	pfile_struct_buf->right = NULL;
-	//TODO: add HASH method here to compare file content?
-	return 0;
+	new_node->next = list;
+	prev->next = new_node;
+
+	return new_node;
 }
 
 
 //compare 2 file info structs
 //priority: name -> size -> content, if higher priority fails -> will not check the rest
-
-int fcmp(file_t *pfile1, file_t *pfile2, int mode)  //return 1 or 0 (true or false)
+int fcmp(file_t *pfile1, file_t *pfile2, int mode)
 {
-	
 	int bytes_read1, bytes_read2;
 	bytes_read1 = bytes_read2 = 1;
 	
-	//if (!(pfile1->fpath) || !(pfile2->fpath)) return ERROR;  //sanity check.
+	//if (!(pfile1->fpath) || !(pfile2->fpath)) return F_ERROR;  //sanity check.
 	int ret = 0;
 	if (mode & FCMP_NAME) {
+		if (pfile1->fname[0] == '\0') strcpy(pfile1->fname, extract_file_name(pfile1->fpath));
+		if (pfile2->fname[0] == '\0') strcpy(pfile2->fname, extract_file_name(pfile2->fpath));
 		ret = strcmp(pfile1->fname, pfile2->fname);
 	}
 	if (mode & FCMP_SIZE) {
 		if (ret == 0) {  //if files have not been compared or higher priority check was a match
+			if (pfile1->fsize == 0) pfile1->fsize = file_get_size(pfile1->fpath);
+			if (pfile2->fsize == 0) pfile2->fsize = file_get_size(pfile2->fpath);
 			ret = pfile1->fsize - pfile2->fsize;
 		}
 	}
-	
+	/*
 	if (mode & FCMP_CONTENT) {  //TODO: replace this with hash method?
 		char buf1[1024];
 		char buf2[1024];
-		if (pfile1->fsize != pfile2->fsize) return -1;  //compare sizes again jic, return 0 if sizes differ.
+		if (ret != 0) return ret;  //if previous checks failed then return
 		FILE *fd1 = fopen(pfile1->fpath, "rb");
 		FILE *fd2 = fopen(pfile2->fpath, "rb");
-		if (fd1 == NULL || fd2 == NULL) return -1;  //file inaccessible.
+		if (fd1 == NULL || fd2 == NULL) return F_ERROR;  //file inaccessible.
 		while (1) {
 			bytes_read1 = fread(buf1, 1, sizeof(buf1), fd1);
 			bytes_read2 = fread(buf2, 1, sizeof(buf2), fd2);
@@ -104,7 +134,7 @@ int fcmp(file_t *pfile1, file_t *pfile2, int mode)  //return 1 or 0 (true or fal
 		}
 		fclose(fd1);
 		fclose(fd2);
-	}
+	}*/
 	return ret;
 }
 
@@ -113,13 +143,24 @@ file_t* traverse_tree(file_t *parent, file_t *target, int mode)  //traverse tree
 {
 	if (parent == NULL) {
 		parent = target;
+		parent->fsize = 0;  //init fsize, fcmp() will get actual file size
+		parent->fname[0] = '\0';  //fcmp() will extract filename
+		parent->left = NULL;
+		parent->right = NULL;
 	}
 	else if (fcmp(parent, target, mode) == 0) {
 		//handle duplicate file
-		//TODO: something about formatting
-		//save them to an array to write somewhere later?
-		printf("%s\n", parent->fpath);  //original file's path
-		printf("%s\n", target->fpath);  //duplicate file's path
+		g_duplicate_count++;
+		int pos = list_find(g_duplicate_list, parent->fpath);
+		if (pos == -1) {  //first duplication, add a linebreak to output
+			list_add(g_duplicate_list, " ");  //the linebreak
+			list_add(g_duplicate_list, parent->fpath);
+			list_add(g_duplicate_list, target->fpath);
+		}
+		else list_insert(g_duplicate_list, target->fpath, pos);
+		
+		//printf("%s\n", parent->fpath);  //original file's path
+		//printf("%s\n", target->fpath);  //duplicate file's path
 	}
 	else if (fcmp(parent, target, mode) < 0) {
 		parent->left = traverse_tree(parent->left, target, mode);
@@ -129,6 +170,7 @@ file_t* traverse_tree(file_t *parent, file_t *target, int mode)  //traverse tree
 	}
 	return parent;
 }
+
 
 //traverse dir and find all duplicate files within it
 //O(nlogn) time complexity using binary tree dir structure with n = number of files in root dir
@@ -156,10 +198,12 @@ int traverse_dir(file_t *root, char *dir, int mode)
 				puts("out of memory");
 				return -1;
 			}*/
-			file_get_info(target_file, full_entry_path, mode);
+			
+			strcpy(target_file->fpath, full_entry_path);  //index fpath
 
-			//will only modify root if root is NULL, then root stays the same
-			//in other words, traverse_tree() only carries node return ptr thru 1 recursion level
+			//will only modify root if root is NULL
+			//in other words, traverse_tree() will only carry return ptr of node thru 1 recursion level
+			//otherwise it will return the same pointer to root
 			root = traverse_tree(root, target_file, mode);
 			g_traverse_index++;
 		}
@@ -176,10 +220,10 @@ void show_help(char *prog_name)
 		"description : check for duplicate files in a directory\n"
 		"author      : sandwichdoge@gmail.com\n\n"
 		"usage:\n"
-		"%s <directory> [-n] [-s] [-c]\n"
+		"%s <directory> [-n] [-s]\n"
 		"-n: compare names\n"
 		"-s: compare sizes\n"
-		"-c: compare content\n", prog_name);
+		, prog_name);
 }
 
 
@@ -210,12 +254,19 @@ int main(int argc, char **argv)
 	}
 	
 	g_traverse_index = 0;
+	g_duplicate_count = 0;
+	g_duplicate_list = list_add(NULL, "");  //init duplicate list
 
 	file_t *root = NULL;
 	traverse_dir(root, search_dir, mode);
 
-	printf("from totally %d files in directory.\n", g_traverse_index);
+	printf("found %d duplicate files from %d files in directory.\n", g_duplicate_count, g_traverse_index);
 	
+	while (g_duplicate_list != NULL) {
+		printf("%s\n", g_duplicate_list->str);
+		g_duplicate_list = g_duplicate_list->next;
+	}
+
 	if (root != NULL) free(root);
 	return 0;
 }
