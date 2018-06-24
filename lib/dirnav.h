@@ -48,7 +48,7 @@ char* extract_file_dir(char* sFilePath, int isLastSeparatorIncluded)
 		++ptr;  //include last separator e.g. home/user/myfolder/
 	size_t _len = strlen(ptr);
 	size_t _retSz = strlen(sFilePath) - _len;
-	char* ret = malloc(_retSz + 1);
+	char* ret = (char*)malloc(_retSz + 1);
 	memcpy(ret, sFilePath, _retSz);
 	*(ret+_retSz) = '\0';  //null terminate result string
 	return ret;
@@ -71,7 +71,7 @@ int dir_is_disk(char *dir)  //WIN32 compatibility wth microsoft
 }
 
 
-char *strip_trailing_separator(char *string)
+char *strip_trailing_separator_immutable(char *string)
 {
 	if (dir_is_disk(string)) return string;
 	int len = strlen(string);
@@ -79,10 +79,18 @@ char *strip_trailing_separator(char *string)
 	while (string[i-1] == c_separator()){
 		i--;
 	}
-	char *ret = malloc(len - i + 1);
+	char *ret = (char*)malloc(len - i + 1);
 	memcpy(ret, string, i);
 	ret[i] = '\0';
 	return ret;
+}
+
+
+char *strip_trailing_separator(char *string)
+{
+	if (dir_is_disk(string)) return string;
+	if (string[strlen(string)-1] == c_separator()) string[strlen(string)-1] == '\0';
+	return string;
 }
 
 
