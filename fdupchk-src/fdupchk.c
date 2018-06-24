@@ -16,11 +16,9 @@ typedef unsigned long uint_64b;
 #endif
 
 
-typedef char byte;
-
 typedef struct file_t {
 	char fpath[1024];
-	char fname[128];
+	char fname[256];
 	uint_64b fsize;
 	struct file_t *left;
 	struct file_t *right;
@@ -46,7 +44,7 @@ str_t* list_add(str_t *list, char *str)  //traverse till end of list and add new
 			list = list->next;
 		}
 	}
-	list = malloc(sizeof(str_t));
+	list = (str_t*)malloc(sizeof(str_t));
 	list->str = str;
 	list->next = NULL;
 	if (prev != NULL) prev->next = list;
@@ -74,7 +72,7 @@ str_t* list_insert(str_t *list, char *str, int pos)  //if pos is more than list 
 		list = list->next;
 		if (list == NULL) break;
 	}
-	str_t *new_node = malloc(sizeof(str_t));
+	str_t *new_node = (str_t*)malloc(sizeof(str_t));
 	new_node->str = str;
 	
 	new_node->next = list;
@@ -98,6 +96,7 @@ void list_free(str_t *list)
 
 //compare 2 file info structs
 //priority: name -> size -> content, if higher priority fails -> will not check the rest
+//return 0 on match, otherwise return magnitude of difference
 int fcmp(file_t *pfile1, file_t *pfile2, int mode)
 {
 	int bytes_read1, bytes_read2;
@@ -160,7 +159,7 @@ file_t* tree_traverse(file_t *parent, file_t *target, int mode)  //traverse tree
 		parent->left = NULL;
 		parent->right = NULL;
 	}
-	else if (fcmp(parent, target, mode) == 0) {
+	else if (fcmp(target, parent, mode) == 0) {
 		//handle duplicate file
 		g_duplicate_count++;
 		int pos = list_find(g_duplicate_list, parent->fpath);
@@ -174,10 +173,10 @@ file_t* tree_traverse(file_t *parent, file_t *target, int mode)  //traverse tree
 		//printf("%s\n", parent->fpath);  //original file's path
 		//printf("%s\n", target->fpath);  //duplicate file's path
 	}
-	else if (fcmp(parent, target, mode) < 0) {
+	else if (fcmp(target, parent, mode) < 0) {
 		parent->left = tree_traverse(parent->left, target, mode);
 	}
-	else if (fcmp(parent, target, mode) > 0) {
+	else if (fcmp(target, parent, mode) > 0) {
 		parent->right = tree_traverse(parent->right, target, mode);
 	}
 	return parent;
@@ -195,7 +194,7 @@ void tree_free(file_t *parent)
 
 
 //traverse dir and find all duplicate files within it
-//O(nlogn) time complexity using binary tree dir structure with n = number of files in root dir
+//O(nlogn) time complexity using binary tree dir structure whereas n = number of files in root dir
 file_t* find_duplicates(file_t *root, char *dir, int mode)
 {
 	char full_entry_path[1024];
@@ -215,17 +214,17 @@ file_t* find_duplicates(file_t *root, char *dir, int mode)
 			}
 		}
 		else if (entry->d_type == DT_REG) {  //if entry is a regular file -> put it in file tree and perform comparison.
-			file_t *target_file = malloc(sizeof(file_t));
-			/*if (target_file == NULL){
-				puts("out of memory");
-				return -1;
-			}*/
+			file_t *target_file = (file_t*)malloc(sizeof(file_t));
+			if (target_file == NULL){
+				printf("out of memory\n");
+				return NULL;
+			}
 			
 			strcpy(target_file->fpath, full_entry_path);  //index fpath
 
 			//will only modify root if root is NULL
-			//in other words, tree_traverse() will only carry return ptr of node thru 1 recursion level
-			//otherwise it will return the same pointer to root
+			//in other words, tree_traverse() will only carry the return ptr of node thru 1 recursion level
+			//otherwise it will return the same pointer to param parent (root in this case)
 			root = tree_traverse(root, target_file, mode);
 			g_traverse_index++;
 		}
@@ -258,14 +257,14 @@ int main(int argc, char **argv)
 	
 	int mode = 0;
 	char *search_dir;
-	
+
 	for (int i = 1; i < argc; i++){  //load up params
 		if (strcmp(argv[i], "-n") == 0) mode |= FCMP_NAME;
 		else if (strcmp(argv[i], "-s") == 0) mode |= FCMP_SIZE;
 		else if (strcmp(argv[i], "-c") == 0) mode |= FCMP_CONTENT;
+		//else if (strcmp(argv[i], "-t") == 0 && i+1 < count) 
 		if (argv[i][0] != '-') search_dir = strip_trailing_separator(argv[i]);
 	}
-	
 	if (mode == 0) {
 		printf("please set at least 1 comparision parameter [-n][-s].\n");
 		return 0;
@@ -277,7 +276,7 @@ int main(int argc, char **argv)
 	
 	g_traverse_index = 0;
 	g_duplicate_count = 0;
-	g_duplicate_list = list_add(NULL, "");  //init duplicate list
+	g_duplicate_list = list_add(NULL, "");  //initialize duplicate list
 
 	file_t *root = NULL;
 	root = find_duplicates(root, search_dir, mode);
@@ -288,6 +287,7 @@ int main(int argc, char **argv)
 	}
 
 	printf("found %d duplicate files from %d files in directory.\n", g_duplicate_count, g_traverse_index);
+
 	tree_free(root);
 	list_free(g_duplicate_list);
 	return 0;
