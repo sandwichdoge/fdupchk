@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../lib/dirnav.h"
+#include "../lib/list.h"
 
 #define F_ERROR -256
 #define FCMP_NAME 1
@@ -24,75 +25,11 @@ typedef struct file_t {
 	struct file_t *right;
 } file_t;
 
-typedef struct str_t {  //linked list of strings
-	char *str;  //this should point to file_node->fpath
-	struct str_t *next;
-} str_t;
-
 
 int g_traverse_index;  //total number of files in dir
 int g_duplicate_count;  //number of duplicate files
-str_t *g_duplicate_list;
+node_t *g_duplicate_list;  //linked list containing names of duplicate files
 
-
-str_t* list_add(str_t *list, char *str)  //traverse till end of list and add new member, return ptr to it
-{
-	str_t *prev = NULL;
-	if (list != NULL) {
-		while (list != NULL) {
-			prev = list;
-			list = list->next;
-		}
-	}
-	list = (str_t*)malloc(sizeof(str_t));
-	list->str = str;
-	list->next = NULL;
-	if (prev != NULL) prev->next = list;
-	return list;
-}
-
-
-int list_find(str_t *list, char *str)  //return index of str in list
-{
-	int index = 0;
-	while (list != NULL) {
-		if (strcmp(list->str, str) == 0) return index;
-		list = list->next;
-		index++;
-	}
-	return -1;  //not found
-}
-
-
-str_t* list_insert(str_t *list, char *str, int pos)  //if pos is more than list bound, add new member to end of list
-{
-	str_t *prev;
-	while (pos-- >= 0) {
-		prev = list;
-		list = list->next;
-		if (list == NULL) break;
-	}
-	str_t *new_node = (str_t*)malloc(sizeof(str_t));
-	new_node->str = str;
-	
-	new_node->next = list;
-	prev->next = new_node;
-
-	return new_node;
-}
-
-
-void list_free(str_t *list)
-{
-	str_t *tmp;
-	while (list != NULL) {
-		tmp = list->next;
-		free(list);
-		list = tmp;
-	}
-
-	return;
-}
 
 //compare 2 file info structs
 //priority: name -> size -> content, if higher priority fails -> will not check the rest
@@ -162,7 +99,7 @@ file_t* tree_traverse(file_t *parent, file_t *target, int mode)  //traverse tree
 	else if (fcmp(target, parent, mode) == 0) {
 		//handle duplicate file
 		g_duplicate_count++;
-		int pos = list_find(g_duplicate_list, parent->fpath);
+		int pos = list_findstr(g_duplicate_list, parent->fpath);
 		if (pos == -1) {  //first duplication, add a linebreak to output
 			list_add(g_duplicate_list, " ");  //the linebreak
 			list_add(g_duplicate_list, parent->fpath);
@@ -170,8 +107,8 @@ file_t* tree_traverse(file_t *parent, file_t *target, int mode)  //traverse tree
 		}
 		else list_insert(g_duplicate_list, target->fpath, pos);
 		
-		//printf("%s\n", parent->fpath);  //original file's path
-		//printf("%s\n", target->fpath);  //duplicate file's path
+		//parent->fpath: original file's path
+		//target->fpath: duplicate file's path
 	}
 	else if (fcmp(target, parent, mode) < 0) {
 		parent->left = tree_traverse(parent->left, target, mode);
@@ -222,9 +159,9 @@ file_t* find_duplicates(file_t *root, char *dir, int mode)
 			
 			strcpy(target_file->fpath, full_entry_path);  //index fpath
 
-			//will only modify root if root is NULL
+			//will only modify root if root is NULL, root will be modified only once on 1st iteration then stays the same
 			//in other words, tree_traverse() will only carry the return ptr of node thru 1 recursion level
-			//otherwise it will return the same pointer to param parent (root in this case)
+			//_otherwise it will return the same pointer to param parent (root in this case)
 			root = tree_traverse(root, target_file, mode);
 			g_traverse_index++;
 		}
