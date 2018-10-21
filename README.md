@@ -3,10 +3,10 @@ check for duplicate files in a directory
 
 # compile
 ```
-gcc -o <prog_name> fdupchk.c
+make
 ```
 
 # usage
 ```
-<prog_name> [--help] [-n] [-s] [-c] <directory>
+fdupchk [--help] [-n] [-s]  <directory>
 ```
