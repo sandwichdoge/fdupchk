@@ -99,13 +99,14 @@ file_t* tree_traverse(file_t *parent, file_t *target, int mode)  //traverse tree
 	else if (fcmp(target, parent, mode) == 0) {
 		//handle duplicate file
 		g_duplicate_count++;
-		int pos = list_findstr(g_duplicate_list, parent->fpath);
-		if (pos == -1) {  //first duplication, add a linebreak to output
-			list_add(g_duplicate_list, " ");  //the linebreak
-			list_add(g_duplicate_list, parent->fpath);
-			list_add(g_duplicate_list, target->fpath);
-		}
-		else list_insert(g_duplicate_list, target->fpath, pos);
+		
+		node_t *pos = list_findstr(g_duplicate_list, parent->fpath);
+		if (pos == NULL) {  //first duplication, add a linebreak to output
+			g_duplicate_list = list_add_front(g_duplicate_list, " ");  //the linebreak
+			g_duplicate_list = list_add_front(g_duplicate_list, parent->fpath);
+			g_duplicate_list = list_add_front(g_duplicate_list, target->fpath);
+		} //not 1st duplication
+		else list_insert(pos, target->fpath);
 		
 		//parent->fpath: original file's path
 		//target->fpath: duplicate file's path

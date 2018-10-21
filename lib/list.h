@@ -9,9 +9,21 @@ typedef struct node_t {  //linked list node
 } node_t;
 
 
+//add a new node to front of list, return ptr to it
+node_t* list_add_front(node_t *head, void *str)
+{
+	node_t *new_node = (node_t*)malloc(sizeof(node_t));
+	new_node->str = str;
+	new_node->next = head;
+	return new_node;
+}
+
+
 node_t* list_add(node_t *list, void *str)  //add a new node to end of list, return ptr to it
 {
 	node_t *new_node = (node_t*)malloc(sizeof(node_t));
+	if (new_node == NULL) return NULL; //out of memory
+
 	new_node->str = str;
 	new_node->next = NULL;
 	if (list == NULL) return new_node;
@@ -23,43 +35,41 @@ node_t* list_add(node_t *list, void *str)  //add a new node to end of list, retu
 }
 
 
-int list_findstr(node_t *list, char *str)  //return index of str in list
+node_t* list_findstr(node_t *list, char *str)  //return index of str in list
 {
 	int index = 0;
 	while (list != NULL) {
-		if (strcmp(list->str, str) == 0) return index;
+		if (strcmp(list->str, str) == 0) return list;
 		list = list->next;
-		index++;
+		++index;
 	}
-	return -1;  //not found
+	return NULL;  //not found
 }
 
 
-node_t* list_insert(node_t *list, void *str, int pos)  //if pos is more than list bound, add new member to end of list
+//insert a new node after head
+int list_insert(node_t *head, void *str)
 {
-	node_t *prev;
-	while (pos-- >= 0) {
-		prev = list;
-		list = list->next;
-		if (list == NULL) break;
-	}
 	node_t *new_node = (node_t*)malloc(sizeof(node_t));
-	new_node->str = str;
-	
-	new_node->next = list;
-	prev->next = new_node;
+	if (new_node == NULL) return -1; //out of memory
+	new_node->str = str; //define new_node data
 
-	return new_node;
+	node_t *nxt = head->next;
+	head->next = new_node;
+	new_node->next = nxt;
+
+	return 0;
 }
 
 
-void list_free(node_t *list)
+//free all nodes after head
+void list_free(node_t *head)
 {
 	node_t *tmp;
-	while (list != NULL) {
-		tmp = list->next;
-		free(list);
-		list = tmp;
+	while (head != NULL) {
+		tmp = head->next;
+		free(head);
+		head = tmp;
 	}
 
 	return;
